@@ -290,7 +290,6 @@ def render_set(
             torchvision.utils.save_image(render_rgb, os.path.join(pbr_path, f"{idx:05d}.png"))
             torchvision.utils.save_image(diffuse_rgb, os.path.join(pbr_path, f"{idx:05d}_diffuse.png"))
             torchvision.utils.save_image(specular_rgb, os.path.join(pbr_path, f"{idx:05d}_specular.png"))
-            torchvision.utils.save_image(render_rgb-IRR2, os.path.join(pbr_path, f"{idx:05d}_DIR.png"))
             # torchvision.utils.save_image(pbr_image, os.path.join(pbr_path, f"{idx:05d}_pbr.png"))
             # torchvision.utils.save_image(decom, os.path.join(pbr_path, f"{idx:05d}_decom.png"))
             torchvision.utils.save_image((depth_map-depth_map.min()) / (depth_map.max()-depth_map.min()), os.path.join(depths_path, f"{idx:05d}_depth.png"))
@@ -334,7 +333,7 @@ def launch(
 
 
 
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
     model_params = checkpoint["gaussians"]
     cubemap_params = checkpoint["cubemap"]
 
@@ -416,7 +415,6 @@ def eval_brdf(data_root: str, scene: Scene, model_path: str, name: str) -> None:
     albedo_psnr_avg = 0.0
     albedo_ssim_avg = 0.0
     albedo_lpips_avg = 0.0
-    mse_loss = 0.0
 
     pbr_path = os.path.join(model_path, name, f"ours_{iteration}", "pbr")
     albedo_gts = []
@@ -469,29 +467,26 @@ def eval_brdf(data_root: str, scene: Scene, model_path: str, name: str) -> None:
     gt_albedo_all = torch.cat(gt_albedo_list, dim=0)
     albedo_map_all = torch.cat(reconstructed_albedo_list, dim=0)
     # single_channel_ratio = (gt_albedo_all / albedo_map_all.clamp(min=1e-6))[..., 0].median()  # [1]
-    # three_channel_ratio, _ = (gt_albedo_all / albedo_map_all.clamp(min=1e-6)).median(dim=0)  # [3]
+    three_channel_ratio, _ = (gt_albedo_all / albedo_map_all.clamp(min=1e-6)).median(dim=0)  # [3]
 
 
     for idx, (mask, albedo_map, albedo_gt) in enumerate(tqdm(zip(masks, albedo_maps, albedo_gts))):
-        roughmse =(albedo_map - albedo_gt) ** 2  # 平方误差
-        masked_diff = roughmse[mask] 
-        mse_loss += masked_diff.mean()
-        # albedo_map[mask] *= three_channel_ratio
+        albedo_map[mask] *= three_channel_ratio
         # albedo_map[mask] *= single_channel_ratio
-        # albedo_map = albedo_map.permute(2, 0, 1)  # [3, H, W]
-        # albedo_gt = albedo_gt.permute(2, 0, 1)  # [3, H, W]
+        albedo_map = albedo_map.permute(2, 0, 1)  # [3, H, W]
+        albedo_gt = albedo_gt.permute(2, 0, 1)  # [3, H, W]
         # torchvision.utils.save_image(albedo_map, os.path.join(pbr_path, f"{idx:05d}_albedo.png"))
-        # torchvision.utils.save_image(albedo_gt, os.path.join(pbr_path, f"{idx:05d}_albedo_gt.png"))
-        # albedo_psnr_avg += get_psnr(albedo_gt, albedo_map).mean().double()
-        # albedo_ssim_avg += get_ssim(albedo_gt, albedo_map).mean().double()
-        # albedo_lpips_avg += lpips_fn(albedo_gt, albedo_map).mean().double()
-        # roughmse = mse(albedo_gt, albedo_map).double()
+        torchvision.utils.save_image(albedo_gt, os.path.join(pbr_path, f"{idx:05d}_albedo_gt.png"))
+        albedo_psnr_avg += get_psnr(albedo_gt, albedo_map).mean().double()
+        albedo_ssim_avg += get_ssim(albedo_gt, albedo_map).mean().double()
+        albedo_lpips_avg += lpips_fn(albedo_gt, albedo_map).mean().double()
 
-    # albedo_psnr = albedo_psnr_avg / len(frames)
-    # albedo_ssim = albedo_ssim_avg / len(frames)
-    # albedo_lpips = albedo_lpips_avg / len(frames)
-    roughmse = mse_loss / len(frames)
-    print(f"roughmse: {roughmse}")
+    albedo_psnr = albedo_psnr_avg / len(frames)
+    albedo_ssim = albedo_ssim_avg / len(frames)
+    albedo_lpips = albedo_lpips_avg / len(frames)
+    print(f"albedo_psnr: {albedo_psnr}")
+    print(f"albedo_ssim: {albedo_ssim}")
+    print(f"albedo_lpips: {albedo_lpips}")
 
 
 if __name__ == "__main__":
