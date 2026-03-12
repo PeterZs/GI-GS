@@ -64,7 +64,7 @@ python train.py \
 --thick 0.05 \
 --delta 0.0625 \
 --step 16 \
---start 64 \
+--start 8 \
 --indirect
 ```
 > set `--gamma` to enable **linear_to_sRGB** will cause *better relighting results* but *worse novel view synthesis results*  
@@ -159,7 +159,7 @@ python train.py \
 --thick 0.05 \
 --delta 0.0625 \
 --step 16 \
---start 64 \
+--start 8 \
 --degree 3 \
 --indirect
 ```
